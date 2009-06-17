@@ -8,6 +8,7 @@
 #include "ftpscan.h"
 
 static int test_port(int fd, in_port_t);
+static in_addr_t get_local_address(int);
 static void run_scan();
 static void create_port_command(char *, size_t, in_addr_t, in_port_t);
 static void create_eprt_command(char *, size_t, in_addr_t, in_port_t);
@@ -22,7 +23,6 @@ usage(const char *progname)
 {
 	fprintf(stderr, "Usage: %s [options] target_ip port_range\n", progname);
 	fprintf(stderr, "Options:\n");
-	fprintf(stderr, " -a local_ip        Local IP address that remote FTP server will connect back to\n");
 	fprintf(stderr, " -p target_port     Target FTP port [default 21]\n");
 	fprintf(stderr, " -x                 Use EPRT command instead of PORT\n");
 	fprintf(stderr, " -v                 Enable verbose output\n");
@@ -35,16 +35,13 @@ main(int argc, char **argv)
 	int ch;
 	char *progname = argv[0];
 
-	while((ch = getopt(argc, argv, "a:p:vx")) != -1) {
+	while((ch = getopt(argc, argv, "p:vx")) != -1) {
 		switch(ch) {
 			case 'v':
 				enable_debug(1);
 				break;
 			case 'p':
 				target_port = atoi(optarg);
-				break;
-			case 'a':
-				local_address = inet_addr(optarg);
 				break;
 			case 'x':
 				use_eprt = 1;
@@ -72,6 +69,9 @@ run_scan()
 	int fd = connect_server(target_address, target_port);
 	if(fd < 0)
 		exit(EXIT_FAILURE);
+
+	local_address = get_local_address(fd);
+
 	if(ftp_anon_login(fd)) {
 		warn("Login failed.");
 		close(fd);
@@ -82,6 +82,20 @@ run_scan()
 	for(i = next_port(); i != 0; i = next_port())
 		test_port(fd, i);
 	ftp_exchange_command(fd, "QUIT");
+}
+
+static in_addr_t
+get_local_address(int fd)
+{
+	struct sockaddr_in sin;
+	socklen_t sinlen = sizeof(sin);
+
+	if(getsockname(fd, (struct sockaddr *)&sin, &sinlen) < 0)
+		fatal("getsockname() failed");
+
+	debug("Local IP address is %s", inet_ntoa(sin.sin_addr));
+
+	return sin.sin_addr.s_addr;
 }
 
 static int
