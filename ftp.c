@@ -44,7 +44,7 @@ ftp_login(int fd, const char *username, const char *password)
 int
 ftp_anon_login(int fd)
 {
-	return ftp_login(fd, "ftp", "x@");
+	return ftp_login(fd, "ftp", "IEUser@");
 }
 
 int
