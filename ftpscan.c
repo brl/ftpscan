@@ -10,8 +10,13 @@
 #include "ftpscan.h"
 
 #define DEFAULT_TIMEOUT 	3000
+
+#define TEST_SUCCESS		0
+#define TEST_TIMEOUT		1
+#define TEST_ERROR			3
+
 static in_addr_t parse_target(const char *);
-static int test_port(int fd, in_port_t);
+static int test_port(int fd, in_port_t port, int timeout);
 static in_addr_t get_local_address(int);
 static void run_scan();
 static void create_port_command(char *, size_t, in_addr_t, in_port_t);
@@ -21,7 +26,8 @@ static in_addr_t local_address;
 static in_addr_t target_address;
 static in_port_t target_port = 21;
 static int use_eprt = 0;
-static int timeout = DEFAULT_TIMEOUT;
+static int verbose = 0;
+static int connect_timeout = DEFAULT_TIMEOUT;
 
 static void
 usage(const char *progname)
@@ -44,13 +50,14 @@ main(int argc, char **argv)
 	while((ch = getopt(argc, argv, "p:t:vx")) != -1) {
 		switch(ch) {
 			case 'v':
+				verbose++;
 				enable_debug(1);
 				break;
 			case 'p':
 				target_port = atoi(optarg);
 				break;
 			case 't':
-				timeout = atoi(optarg);
+				connect_timeout = atoi(optarg);
 			case 'x':
 				use_eprt = 1;
 				break;
@@ -109,8 +116,30 @@ run_scan()
 	}
 	info("Logged in.");
 	int i;
-	for(i = next_port(); i != 0; i = next_port())
-		test_port(fd, i);
+	for(i = next_port(); i != 0; i = next_port()) {
+		fprintf(stderr, "[+] Testing port %d\t", i);
+		if(verbose) fprintf(stderr, "...\n");
+		switch(test_port(fd, i, connect_timeout)) {
+		case TEST_SUCCESS:
+			fprintf(stderr, "OPEN!\n");
+			break;
+		case TEST_ERROR:
+			fprintf(stderr, "ERROR (%s)\n", ftp_get_last_server_message());
+			break;
+		case TEST_TIMEOUT:
+			switch(test_port(fd, i, connect_timeout * 2)) {
+			case TEST_SUCCESS:
+				fprintf(stderr, "OPEN!\n");
+				break;
+			case TEST_ERROR:
+				fprintf(stderr, "ERROR (%s)\n", ftp_get_last_server_message());
+				break;
+			case TEST_TIMEOUT:
+				fprintf(stderr, "BLOCKED (time out)\n");
+				break;
+			}
+		}
+	}
 	ftp_exchange_command(fd, "QUIT");
 }
 
@@ -129,7 +158,7 @@ get_local_address(int fd)
 }
 
 static int
-test_port(int fd, in_port_t port)
+test_port(int fd, in_port_t port, int timeout)
 {
 	char buffer[256];
 
@@ -140,38 +169,29 @@ test_port(int fd, in_port_t port)
 
 	int code = ftp_exchange_command(fd, buffer);
 
-	if(!ftp_code_okay(code)) {
-		fprintf(stderr, "[+] Testing port %d ERROR (%s)\n", port, ftp_get_last_server_message());
-		return -1;
-	}
+	if(!ftp_code_okay(code))
+		return TEST_ERROR;
 
 	int s = listen_port(port);
 
 	code = ftp_exchange_command(fd, "LIST");
 
-	if(code != 150) {
-		warn("Unexpected respose code from LIST: %d", code);
-	}
-
-	fprintf(stderr, "[+] Testing port %d", port);
+	if(code != 150)
+		warn("Unexpected response code from LIST: %d", code);
 
 	int s2 = wait_accept(s, timeout);
 	close(s);
 
-	if(s2 == 0) {
-		fprintf(stderr, " BLOCKED (time out)\n");
-		return -1;
-	}
+	if(s2 == 0)
+		return TEST_TIMEOUT;
 
-	if(s2 == -1) {
-		fprintf(stderr, " FAILED (socket error)\n");
-		return -1;
-	}
+	if(s2 == -1)
+		return TEST_ERROR;
 
-	fprintf(stderr, " OPEN!\n");
 	drain_all(s2);
+	ftp_command_response(fd);
 	ftp_drain_extra_responses(fd);
-	return 0;
+	return TEST_SUCCESS;
 }
 
 
