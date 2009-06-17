@@ -108,7 +108,7 @@ test_port(int fd, in_port_t port)
 
 	if(poll(&pfd, 1, 2000) == 0) {
 		close(s);
-		fprintf(stderr, " TIME OUT\n");
+		fprintf(stderr, " BLOCKED (time out)\n");
 		return -1;
 	}
 	if((pfd.revents & POLLIN) == 0) {
@@ -127,7 +127,7 @@ test_port(int fd, in_port_t port)
 		return -1;
 	}
 
-	fprintf(stderr, " ACCEPTED!\n");
+	fprintf(stderr, " OPEN!\n");
 	close(s);
 	drain_all(s2);
 	ftp_command_response(fd);
