@@ -23,6 +23,9 @@ ftp_login(int fd, const char *username, const char *password)
 	snprintf(buffer, sizeof(buffer), "USER %s", username);
 
 	int code = ftp_exchange_command(fd, buffer);
+	if(code == 230)
+		return 0;
+
 	if(code != 331) {
 		warn("Login failed.");
 		return -1;
