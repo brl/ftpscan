@@ -8,8 +8,11 @@
 #define CRLF_LEN	2
 
 static int ftp_read_banner(int fd);
+static char *ftp_read_line(int fd);
 static void strip(char *string);
 static int response2code(const char *response);
+
+static char *last_server_message;
 
 int
 ftp_login(int fd, const char *username, const char *password)
@@ -67,50 +70,61 @@ ftp_exchange_command(int fd, const char *command)
 int
 ftp_command_response(int fd)
 {
-	char response[1024];
-	int n;
-
-	if((n = recv(fd, response, sizeof(response), 0)) < 0) {
-		error("recv() failed reading response from command.");
-		return -1;
-	}
-
-	if(n == 0) {
-		warn("EOF reading command response.");
-		return -1;
-	}
-
-	response[n] = 0;
-	strip(response);
+	char *response = ftp_read_line(fd);
 
 	debug("<-- %s", response);
+
+	if(strlen(response) > 4)
+		last_server_message = response + 4;
+	else
+		last_server_message = "";
 
 	return response2code(response);
 }
 
-static int 
+char *
+ftp_get_last_server_message()
+{
+	return last_server_message;
+}
+
+static char *
+ftp_read_line(int fd)
+{
+	static char line_buffer[1024];
+	char c;
+	int n;
+	size_t count = 0;
+	size_t remaining = sizeof(line_buffer) - 1;
+
+	while(remaining > 0) {
+		if((n = recv(fd, &c, 1, 0)) < 0)
+			fatal("recv() failed reading line from server.");
+
+		if(n == 0)
+			fatal("EOF reading line from server.");
+
+		if(c == '\r')
+			continue;
+		if(c == '\n')
+			break;
+		line_buffer[count] = c;
+		count++;
+		remaining--;
+	}
+	if(remaining == 0)
+		warn("No newline found in response after reading %d bytes.", count);
+
+	line_buffer[count] = 0;
+	strip(line_buffer);
+	return line_buffer;
+}
+
+static int
 ftp_read_banner(int fd)
 {
-	char buffer[1024];
-	int n;
-
-	if((n = recv(fd, buffer, sizeof(buffer), 0)) < 0) {
-		error("recv() failed reading banner");
-		return -1;
-	}
-
-	if(n == 0) {
-		warn("Remote server closed connection.");
-		return -1;
-	}
-
-	buffer[n] = 0;
-	strip(buffer);
-
-	info("Received banner: %s", buffer);
-
+	info("Received banner: %s", ftp_read_line(fd));
 	return 0;
-	
 }
 
 static void

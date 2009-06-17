@@ -17,6 +17,7 @@ int ftp_anon_login(int fd);
 int ftp_code_okay(int code);
 int ftp_exchange_command(int fd, const char *command);
 int ftp_command_response(int fd);
+char *ftp_get_last_server_message();
 
 int ports_initialize(char *ports_string);
 int next_port();
