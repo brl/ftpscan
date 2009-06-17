@@ -11,6 +11,8 @@ drain_all(int fd)
 	int n;
 	size_t total = 0;
 
+	set_blocking(fd);
+
 	while(1) {
 		if((n = recv(fd, recv_buffer, sizeof(recv_buffer), 0)) < 0) {
 			error("recv() failed while draining data");
