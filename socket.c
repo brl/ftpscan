@@ -2,11 +2,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
 #include "ftpscan.h"
 
+static int do_accept(int);
 
 int
 connect_server(in_addr_t address, in_port_t port)
@@ -67,3 +69,36 @@ set_nonblocking(int fd)
 	return 0;
 }
 
+int
+wait_accept(int s, int timeout)
+{
+	set_nonblocking(s);
+
+	struct pollfd pfd;
+
+	pfd.fd = s;
+	pfd.events = POLLIN;
+	pfd.revents = 0;
+
+	if(poll(&pfd, 1, timeout) == 0)
+		return 0;
+
+	if((pfd.revents & POLLIN) == 0)
+		return -1;
+
+	return do_accept(s);
+}
+
+static int
+do_accept(int s)
+{
+	struct sockaddr_in sin;
+	socklen_t len = sizeof(sin);
+	int new_socket;
+
+	if((new_socket = accept(s, (struct sockaddr *)&sin, &len)) < 0) {
+		error("accept() failed");
+		return -1;
+	}
+	return new_socket;
+}

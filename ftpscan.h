@@ -7,6 +7,7 @@
 int connect_server(in_addr_t address, in_port_t port);
 int listen_port(in_port_t port);
 int set_nonblocking(int fd);
+int wait_accept(int s, int timeout);
 
 int drain_all(int fd);
 void write_all(int fd, const void *buffer, size_t count);

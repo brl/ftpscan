@@ -4,7 +4,6 @@
 #include <unistd.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
-#include <poll.h>
 
 #include "ftpscan.h"
 
@@ -98,46 +97,34 @@ test_port(int fd, in_port_t port)
 		create_port_command(buffer, sizeof(buffer), local_address, port);
 
 	int code = ftp_exchange_command(fd, buffer);
+
 	if(!ftp_code_okay(code)) 
 		return -1;
+
 	int s = listen_port(port);
+
 	code = ftp_exchange_command(fd, "LIST");
+
 	if(code != 150) {
 		warn("Unexpected respose code from LIST: %d", code);
 	}
 
-
 	fprintf(stderr, "[+] Testing port %d", port);
-	set_nonblocking(s);
 
-	struct pollfd pfd;
-	pfd.fd = s;
-	pfd.events = POLLIN;
-	pfd.revents = 0;
+	int s2 = wait_accept(s, 2000);
+	close(s);
 
-	if(poll(&pfd, 1, 2000) == 0) {
-		close(s);
+	if(s2 == 0) {
 		fprintf(stderr, " BLOCKED (time out)\n");
 		return -1;
 	}
-	if((pfd.revents & POLLIN) == 0) {
-		close(s);
-		warn("wtf");
-		return -1;
-	}
 
-	struct sockaddr_in sin2;
-	socklen_t len = sizeof(sin2);
-
-	int s2;
-	if((s2 = accept(s, (struct sockaddr *)&sin2, &len)) < 0) {
-		error("accept() failed()");
-		close(s);
+	if(s2 == -1) {
+		fprintf(stderr, " FAILED (error)\n");
 		return -1;
 	}
 
 	fprintf(stderr, " OPEN!\n");
-	close(s);
 	drain_all(s2);
 	ftp_command_response(fd);
 	return 0;
