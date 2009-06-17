@@ -18,6 +18,11 @@ static in_port_t target_port = 21;
 static void
 usage(const char *progname)
 {
+	fprintf(stderr, "Usage: %s [options] target_ip port_range\n", progname);
+	fprintf(stderr, "Options:\n");
+	fprintf(stderr, " -a local_ip        Local IP address that remote FTP server will connect back to\n");
+	fprintf(stderr, " -p target_port     Target FTP port [default 21]\n");
+	fprintf(stderr, " -v                 Enable verbose output\n");
 	exit(EXIT_FAILURE);
 }
 
