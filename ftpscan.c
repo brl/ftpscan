@@ -2,11 +2,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <netdb.h>
+#include <errno.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
 #include "ftpscan.h"
 
+static in_addr_t parse_target(const char *);
 static int test_port(int fd, in_port_t);
 static in_addr_t get_local_address(int);
 static void run_scan();
@@ -57,10 +60,32 @@ main(int argc, char **argv)
 	if(argc < 2)
 		usage(progname);
 
-	target_address = inet_addr(argv[0]);
+	target_address = parse_target(argv[0]);
 	ports_initialize(argv[1]);
 	run_scan();
 	return 0;
+}
+
+static in_addr_t
+parse_target(const char *target)
+{
+	in_addr_t target_ip = inet_addr(target);
+	if(target_ip != INADDR_NONE)
+		return target_ip;
+
+	struct hostent *hp = gethostbyname(target);
+	if(hp == NULL) {
+		errno = 0;
+		fatal("Could not resolve '%s'", target);
+	}
+
+	memcpy(&target_ip, hp->h_addr, sizeof(target_ip));
+
+	struct in_addr in;
+	in.s_addr = target_ip;
+	debug("Resolved %s to %s", target, inet_ntoa(in));
+
+	return target_ip;
 }
 
 static void
