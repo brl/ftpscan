@@ -10,10 +10,13 @@
 
 static int test_port(int fd, in_port_t);
 static void run_scan();
+static void create_port_command(char *, size_t, in_addr_t, in_port_t);
+static void create_eprt_command(char *, size_t, in_addr_t, in_port_t);
 
 static in_addr_t local_address;
 static in_addr_t target_address;
 static in_port_t target_port = 21;
+static int use_eprt = 0;
 
 static void
 usage(const char *progname)
@@ -22,6 +25,7 @@ usage(const char *progname)
 	fprintf(stderr, "Options:\n");
 	fprintf(stderr, " -a local_ip        Local IP address that remote FTP server will connect back to\n");
 	fprintf(stderr, " -p target_port     Target FTP port [default 21]\n");
+	fprintf(stderr, " -x                 Use EPRT command instead of PORT\n");
 	fprintf(stderr, " -v                 Enable verbose output\n");
 	exit(EXIT_FAILURE);
 }
@@ -32,7 +36,7 @@ main(int argc, char **argv)
 	int ch;
 	char *progname = argv[0];
 
-	while((ch = getopt(argc, argv, "a:p:v")) != -1) {
+	while((ch = getopt(argc, argv, "a:p:vx")) != -1) {
 		switch(ch) {
 			case 'v':
 				enable_debug(1);
@@ -42,6 +46,9 @@ main(int argc, char **argv)
 				break;
 			case 'a':
 				local_address = inet_addr(optarg);
+				break;
+			case 'x':
+				use_eprt = 1;
 				break;
 			case '?':
 			default:
@@ -82,12 +89,14 @@ static int
 test_port(int fd, in_port_t port)
 {
 
-	struct in_addr in;
-
-	in.s_addr = local_address;
 
 	char buffer[256];
-	snprintf(buffer, 256, "EPRT |1|%s|%u|", inet_ntoa(in), port);
+
+	if(use_eprt)
+		create_eprt_command(buffer, sizeof(buffer), local_address, port);
+	else
+		create_port_command(buffer, sizeof(buffer), local_address, port);
+
 	int code = ftp_exchange_command(fd, buffer);
 	if(!ftp_code_okay(code)) 
 		return -1;
@@ -135,5 +144,22 @@ test_port(int fd, in_port_t port)
 }
 
 
+static void
+create_port_command(char *buffer, size_t size, in_addr_t address, in_port_t port)
+{
+	int h1 = address & 0xFF;
+	int h2 = (address >> 8) & 0xFF;
+	int h3 = (address >> 16) & 0xFF;
+	int h4 = (address >> 24) & 0xFF;
+	int p1 = (port >> 8) & 0xFF;
+	int p2 = port & 0xFF;
+	snprintf(buffer, size, "PORT %u,%u,%u,%u,%u,%u", h1,h2,h3,h4,p1,p2);
+}
 
-
+static void
+create_eprt_command(char *buffer, size_t size, in_addr_t address, in_port_t port)
+{
+	struct in_addr in;
+	in.s_addr = address;
+	snprintf(buffer, size, "EPRT |1|%s|%u|", inet_ntoa(in), port);
+}
