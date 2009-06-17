@@ -140,8 +140,10 @@ test_port(int fd, in_port_t port)
 
 	int code = ftp_exchange_command(fd, buffer);
 
-	if(!ftp_code_okay(code)) 
+	if(!ftp_code_okay(code)) {
+		fprintf(stderr, "[+] Testing port %d ERROR (%s)\n", port, ftp_get_last_server_message());
 		return -1;
+	}
 
 	int s = listen_port(port);
 
@@ -162,13 +164,13 @@ test_port(int fd, in_port_t port)
 	}
 
 	if(s2 == -1) {
-		fprintf(stderr, " FAILED (error)\n");
+		fprintf(stderr, " FAILED (socket error)\n");
 		return -1;
 	}
 
 	fprintf(stderr, " OPEN!\n");
 	drain_all(s2);
-	ftp_command_response(fd);
+	ftp_drain_extra_responses(fd);
 	return 0;
 }
 

@@ -1,14 +1,16 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
-
+#include <poll.h>
 #include "ftpscan.h"
 
 #define CRLF		"\r\n"
 #define CRLF_LEN	2
 
+static void set_last_message(char *response);
 static int ftp_read_banner(int fd);
 static char *ftp_read_line(int fd);
+static char *ftp_read_line_timeout(int fd, int timeout);
 static void strip(char *string);
 static int response2code(const char *response);
 
@@ -26,20 +28,16 @@ ftp_login(int fd, const char *username, const char *password)
 	snprintf(buffer, sizeof(buffer), "USER %s", username);
 
 	int code = ftp_exchange_command(fd, buffer);
-	if(code == 230)
+	if(ftp_code_okay(code))
 		return 0;
 
-	if(code != 331) {
-		warn("Login failed.");
+	if(code != 331)
 		return -1;
-	}
 
 	snprintf(buffer, sizeof(buffer), "PASS %s", password);
 
-	if(!ftp_code_okay(ftp_exchange_command(fd, buffer))) {
-		warn("Login failed.");
+	if(!ftp_code_okay(ftp_exchange_command(fd, buffer)))
 		return -1;
-	}
 
 	return 0;
 }
@@ -71,21 +69,58 @@ int
 ftp_command_response(int fd)
 {
 	char *response = ftp_read_line(fd);
-
 	debug("<-- %s", response);
+	set_last_message(response);
+	return response2code(response);
 
-	if(strlen(response) > 4)
+}
+
+void
+ftp_drain_extra_responses(int fd)
+{
+	while(1) {
+		char *extra_response = ftp_read_line_timeout(fd, 500);
+		if(extra_response == NULL)
+			return;
+		debug("<-- %s", extra_response);
+	}
+}
+
+static void
+set_last_message(char *response)
+{
+	if(strlen(response) <= 4) {
+		last_server_message = "";
+		return;
+	}
+
+	if(response[3] == ' ')
 		last_server_message = response + 4;
 	else
-		last_server_message = "";
-
-	return response2code(response);
+		last_server_message = response + 3;
 }
 
 char *
 ftp_get_last_server_message()
 {
 	return last_server_message;
+}
+
+static char *
+ftp_read_line_timeout(int fd, int timeout)
+{
+	struct pollfd pfd;
+
+	pfd.fd = fd;
+	pfd.events = POLLIN;
+	pfd.revents = 0;
+
+	if(poll(&pfd, 1, timeout) == 0)
+		return NULL;
+	if((pfd.revents & POLLIN) == 0)
+		return NULL;
+
+	return ftp_read_line(fd);
 }
 
 static char *
@@ -123,8 +158,12 @@ ftp_read_line(int fd)
 static int
 ftp_read_banner(int fd)
 {
-	info("Received banner: %s", ftp_read_line(fd));
-	return 0;
+	while(1) {
+		char *banner = ftp_read_line_timeout(fd, 1000);
+		if(banner == NULL)
+			return 0;
+		info("%s", banner);
+	}
 }
 
 static void
@@ -151,9 +190,6 @@ response2code(const char *response)
 			return -1;
 		code += response[i] - '0';
 	}
-
-	if(response[3] != ' ')
-		return -1;
 
 	return code;
 }
