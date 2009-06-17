@@ -9,6 +9,7 @@
 
 #include "ftpscan.h"
 
+#define DEFAULT_TIMEOUT 	3000
 static in_addr_t parse_target(const char *);
 static int test_port(int fd, in_port_t);
 static in_addr_t get_local_address(int);
@@ -20,12 +21,14 @@ static in_addr_t local_address;
 static in_addr_t target_address;
 static in_port_t target_port = 21;
 static int use_eprt = 0;
+static int timeout = DEFAULT_TIMEOUT;
 
 static void
 usage(const char *progname)
 {
 	fprintf(stderr, "Usage: %s [options] target_ip port_range\n", progname);
 	fprintf(stderr, "Options:\n");
+	fprintf(stderr, " -t timeout         Time (in milliseconds) to wait for data connection from server. [default %u]\n", DEFAULT_TIMEOUT);
 	fprintf(stderr, " -p target_port     Target FTP port [default 21]\n");
 	fprintf(stderr, " -x                 Use EPRT command instead of PORT\n");
 	fprintf(stderr, " -v                 Enable verbose output\n");
@@ -38,7 +41,7 @@ main(int argc, char **argv)
 	int ch;
 	char *progname = argv[0];
 
-	while((ch = getopt(argc, argv, "p:vx")) != -1) {
+	while((ch = getopt(argc, argv, "p:t:vx")) != -1) {
 		switch(ch) {
 			case 'v':
 				enable_debug(1);
@@ -46,6 +49,8 @@ main(int argc, char **argv)
 			case 'p':
 				target_port = atoi(optarg);
 				break;
+			case 't':
+				timeout = atoi(optarg);
 			case 'x':
 				use_eprt = 1;
 				break;
@@ -126,8 +131,6 @@ get_local_address(int fd)
 static int
 test_port(int fd, in_port_t port)
 {
-
-
 	char buffer[256];
 
 	if(use_eprt)
@@ -150,7 +153,7 @@ test_port(int fd, in_port_t port)
 
 	fprintf(stderr, "[+] Testing port %d", port);
 
-	int s2 = wait_accept(s, 2000);
+	int s2 = wait_accept(s, timeout);
 	close(s);
 
 	if(s2 == 0) {
