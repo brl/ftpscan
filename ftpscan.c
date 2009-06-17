@@ -82,9 +82,12 @@ static int
 test_port(int fd, in_port_t port)
 {
 
+	struct in_addr in;
+
+	in.s_addr = local_address;
 
 	char buffer[256];
-	snprintf(buffer, 256, "EPRT |1|192.168.1.102|%u|", port);
+	snprintf(buffer, 256, "EPRT |1|%s|%u|", inet_ntoa(in), port);
 	int code = ftp_exchange_command(fd, buffer);
 	if(!ftp_code_okay(code)) 
 		return -1;
