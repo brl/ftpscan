@@ -70,6 +70,16 @@ set_nonblocking(int fd)
 }
 
 int
+set_blocking(fd)
+{
+	int flags;
+	flags = fcntl(fd, F_GETFL, 0);
+	flags &= ~O_NONBLOCK;
+	fcntl(fd, F_SETFL, flags);
+	return 0;
+}
+
+int
 wait_accept(int s, int timeout)
 {
 	set_nonblocking(s);
